@@ -15,10 +15,8 @@ public class DictionaryMapper extends Mapper<LongWritable,Text,Text,IntWritable>
 	@Override
 	protected void map(LongWritable key, Text line, Context context) throws IOException, InterruptedException {
 	    String[] fields = splitter.split(line.toString());
-	    
-		String cu = fields[0];
-		System.out.println("cu = " + cu);
-		context.write(new Text(cu), new IntWritable(0));
+	    String tag = fields[2] + "/" + fields[1];
+	    context.write(new Text(tag), new IntWritable(0));
 	}
 
 	@Override

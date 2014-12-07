@@ -10,8 +10,8 @@ import org.apache.hadoop.mapreduce.Reducer.Context;
 public class DictionaryReducer extends Reducer<Text,IntWritable,Text,IntWritable> {
 	
 	@Override
-	protected void reduce(Text cu, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+	protected void reduce(Text tag, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
 		
-		context.write(cu, new IntWritable(0));
+		context.write(tag, new IntWritable(0));
 	} 
 }

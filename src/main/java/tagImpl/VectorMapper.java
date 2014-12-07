@@ -19,9 +19,12 @@ import org.apache.mahout.math.SequentialAccessSparseVector;
 import org.apache.mahout.math.VectorWritable;
 
 public class VectorMapper extends Mapper<LongWritable,Text,Text,VectorWritable> {
+	private static final String AGE="age";
+	private static final String EDU="edu";
+	private static final String INCOME ="income";
+	
 	private Pattern splitter;
 	private VectorWritable writer;
-
 	private Map<String,Integer> dictionary;
 	
 	@Override
@@ -31,10 +34,10 @@ public class VectorMapper extends Mapper<LongWritable,Text,Text,VectorWritable> 
 		String cu = fields[0];
 		String tag = fields[2] + "/"+ fields[1];
 		double weight = 1;
-		NamedVector vector = new NamedVector(new SequentialAccessSparseVector(dictionary.size()), tag);
-		vector.set(dictionary.get(cu), weight);
+		NamedVector vector = new NamedVector(new SequentialAccessSparseVector(dictionary.size() + 3), cu);
+		vector.set(dictionary.get(tag), weight);
 		writer.set(vector);
-		context.write(new Text(tag), writer);
+		context.write(new Text(cu), writer);
 	}
 
 	@Override
@@ -49,10 +52,10 @@ public class VectorMapper extends Mapper<LongWritable,Text,Text,VectorWritable> 
 	
 	private void generateDict(Configuration conf) throws IOException {
 		dictionary = new HashMap<String,Integer>();
-		Path dictionaryPath = new Path("output");
+		Path dictionaryPath = new Path("data/output");
 		FileSystem fs = FileSystem.get(dictionaryPath.toUri(), conf); 
 		FileStatus[] outputFiles = fs.globStatus(new Path(dictionaryPath, "part-*"));
-		int i = 0;
+		int i = 3;
 		for (FileStatus fileStatus : outputFiles) {
 			Path path = fileStatus.getPath();
 			SequenceFile.Reader reader = new SequenceFile.Reader(fs, path, conf);
@@ -60,8 +63,13 @@ public class VectorMapper extends Mapper<LongWritable,Text,Text,VectorWritable> 
 			IntWritable value = new IntWritable();
 			while (reader.next(key, value)) {
 				dictionary.put(key.toString(), Integer.valueOf(i++));
-				System.out.println(key.toString() + " " + dictionary.get(key.toString()));
-			} 
+			}
+		}
+		dictionary.put(AGE, 0);
+		dictionary.put(EDU, 1);
+		dictionary.put(INCOME, 2);
+		for (String s: dictionary.keySet()){
+			System.out.println(s + " "+dictionary.get(s));
 		}
 
 	}

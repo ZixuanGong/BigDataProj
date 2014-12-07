@@ -1,126 +1,103 @@
 package tagImpl;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.DefaultStringifier;
 import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
-import org.apache.hadoop.util.GenericsUtil;
+import org.apache.mahout.clustering.Cluster;
+import org.apache.mahout.clustering.classify.WeightedPropertyVectorWritable;
+import org.apache.mahout.clustering.kmeans.KMeansDriver;
+import org.apache.mahout.clustering.kmeans.Kluster;
+import org.apache.mahout.common.distance.EuclideanDistanceMeasure;
+import org.apache.mahout.math.DenseVector;
+import org.apache.mahout.math.NamedVector;
+import org.apache.mahout.math.Vector;
 import org.apache.mahout.math.VectorWritable;
 
 public class Main {
 	
-	public static void main(String[] args) {
+	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException{
 		Configuration conf = new Configuration();
 		Job job, job2;
+		int k = 10;
 		try {
-//			job = new Job(conf, "dictionary");
-//			job.setMapperClass(DictionaryMapper.class);
-//			job.setReducerClass(DictionaryReducer.class);
-//			job.setOutputKeyClass(Text.class);
-//			job.setOutputValueClass(IntWritable.class);
-//			job.setOutputFormatClass(SequenceFileOutputFormat.class);
-//			FileInputFormat.addInputPath(job, new Path("assets/id_car.csv"));
-//			SequenceFileOutputFormat.setOutputPath(job, new Path("output"));
-//			job.waitForCompletion(true);
-//			
-////			generateDict(conf);
-//			
-//			job2 = new Job(conf, "tag_vectors");
-//			job2.setMapperClass(VectorMapper.class);
-//			job2.setReducerClass(VectorReducer.class);
-//			job2.setOutputKeyClass(Text.class);
-//			job2.setOutputValueClass(VectorWritable.class);
-//			job2.setOutputFormatClass(SequenceFileOutputFormat.class);
-//			FileInputFormat.addInputPath(job2, new Path("assets/id_car.csv"));
-//			SequenceFileOutputFormat.setOutputPath(job2, new Path("tag_vectors"));
-//			job2.waitForCompletion(true);
+			job = new Job(conf, "dictionary");
+			job.setMapperClass(DictionaryMapper.class);
+			job.setReducerClass(DictionaryReducer.class);
+			job.setOutputKeyClass(Text.class);
+			job.setOutputValueClass(IntWritable.class);
+			job.setOutputFormatClass(SequenceFileOutputFormat.class);
+			FileInputFormat.addInputPath(job, new Path("assets/id_car.csv"));
+			SequenceFileOutputFormat.setOutputPath(job, new Path("data/output"));
+			job.waitForCompletion(true);
 			
-			int k = 30;
+			job2 = new Job(conf, "points");
+			job2.setMapperClass(VectorMapper.class);
+			job2.setReducerClass(VectorReducer.class);
+			job2.setOutputKeyClass(Text.class);
+			job2.setOutputValueClass(VectorWritable.class);
+			job2.setOutputFormatClass(SequenceFileOutputFormat.class);
+			FileInputFormat.addInputPath(job2, new Path("assets/id_car.csv"));
+			SequenceFileOutputFormat.setOutputPath(job2, new Path("data/points"));
+			job2.waitForCompletion(true);
 
-			FileSystem fs = FileSystem.get(conf);
-			SequenceFile.Reader reader = new SequenceFile.Reader(fs,
-	                  new Path("tag_vectors/part-r-00000"), conf);
-
-			Text key = new Text();
-			VectorWritable value = new VectorWritable();
-			for (int i = 0; i < k; i++) {
-				reader.next(key, value);
-				System.out.println(value.toString());
-
-			}
 			
-		} catch (IOException e) {
+		} catch (InterruptedException e) {
 			e.printStackTrace();
-//		} catch (ClassNotFoundException e) {
-//			e.printStackTrace();
-//		} catch (InterruptedException e) {
-//			e.printStackTrace();
 		}
 
+
+		FileSystem fs;
 		
-
-		// Path path = new Path("clusters/part-m-00000");
-		// for (int i = 0; i < k; i++) {
-		// 	Vector vec = (Vector) points.get(i);
-
-		// 	// write the initial center here as vec
-		// 	Kluster cluster = new Kluster(vec, i, new EuclideanDistanceMeasure());
-		// 	writer.append(new Text(cluster.getIdentifier()), cluster);
-		// 	}
-
-		// 	writer.close();
-//		FileSystem fs;
-//		try {
-//			fs = FileSystem.get(conf);
-//			SequenceFile.Reader reader = new SequenceFile.Reader(fs,
-//	                new Path("output/part-r-00000"), conf);
-//			
-//			Text key = new Text();
-//			IntWritable value = new IntWritable();
-//			
-//			while(reader.next(key, value)) {
-//				System.out.println(key + value.toString());
-//			}
-//			reader.close();
-//		} catch (IOException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
+		fs = FileSystem.get(conf);
+		SequenceFile.Writer writer = new SequenceFile.Writer(fs, conf, new Path("data/clusters/part-00000"), 
+				Text.class, Kluster.class);
+		SequenceFile.Reader reader = new SequenceFile.Reader(fs,
+               new Path("data/points/part-r-00000"), conf);
 		
 		
+		Text key = new Text();
+		VectorWritable value = new VectorWritable();
+		
+		for (int i = 0; i < k; i++) {
+			reader.next(key, value);
+
+			Kluster cluster = new Kluster(value.get(), i, new EuclideanDistanceMeasure());
+			System.out.println(cluster.toString());
+			writer.append(new Text(cluster.getIdentifier()), cluster);
+		}
+		reader.close();
+		writer.close();
+		
+		
+		KMeansDriver.run(conf, new Path("data/points"), new Path("data/clusters"),
+		        new Path("data/output"), 0.001, k, true, 0.1, false);
+		reader = new SequenceFile.Reader(fs,
+		                  new Path("data/output/clusteredPoints/part-m-00000"), conf);
+		IntWritable key_output = new IntWritable();
+		// Read output values
+		WeightedPropertyVectorWritable value_output = new WeightedPropertyVectorWritable();
+       
+       while (reader.next(key_output, value_output)) {
+//        	NamedVector vec = (NamedVector) value_output;
+//        	double[] tmp = new double[3];
+//        	tmp[0] = Math.round(vec.get(0) * 10);
+//			tmp[1] = Math.round(vec.get(1));
+//			tmp[2] = Math.round(vec.get(2) * 10000);
+       	
+//        	Vector vec2 = new DenseVector(tmp);
+           System.out.println(value_output.toString() + " belongs to cluster " + key_output.toString());
+       }
+       reader.close();
 	}
-
-//	private static void generateDict(Configuration conf) throws IOException {
-//		Map<String,Integer> dictionary = new HashMap<String,Integer>();
-//		Path dictionaryPath = new Path("output");
-//		FileSystem fs = FileSystem.get(dictionaryPath.toUri(), conf); 
-//		FileStatus[] outputFiles = fs.globStatus(new Path(dictionaryPath, "part-*"));
-//		int i = 0;
-//		for (FileStatus fileStatus : outputFiles) {
-//			Path path = fileStatus.getPath();
-//			SequenceFile.Reader reader = new SequenceFile.Reader(fs, path, conf);
-//			Text key = new Text();
-//			IntWritable value = new IntWritable();
-//			while (reader.next(key, value)) {
-//				dictionary.put(key.toString(), Integer.valueOf(i++));
-//				System.out.println(key.toString() + " " + dictionary.get(key.toString()));
-//			} 
-//		}
-//
-//	}
+}
 
 }
