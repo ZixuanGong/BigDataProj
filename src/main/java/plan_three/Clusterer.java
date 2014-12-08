@@ -1,11 +1,11 @@
-package tagImpl;
+package plan_three;
 
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.TreeMap;
 
 import org.apache.hadoop.conf.Configuration;
@@ -22,79 +22,131 @@ import org.apache.mahout.clustering.iterator.ClusterWritable;
 import org.apache.mahout.clustering.kmeans.KMeansDriver;
 import org.apache.mahout.clustering.kmeans.Kluster;
 import org.apache.mahout.common.distance.EuclideanDistanceMeasure;
+import org.apache.mahout.math.DenseVector;
+import org.apache.mahout.math.SequentialAccessSparseVector;
 import org.apache.mahout.math.Vector;
 import org.apache.mahout.math.VectorWritable;
 
 public class Clusterer {
 	Configuration conf;
 	HashMap<Long, String> eduMap;
+	HashMap<Long, String> stateMap;
 	HashMap<String,Integer> descr2idx;
 	HashMap<Integer, String> idx2descr;
+	HashMap<String, SequentialAccessSparseVector> consumerUnitInfo;
+	int vec_size;
+	int car_base;
+	int state_base;
 	
 	public Clusterer(Configuration configuration) throws IOException, ClassNotFoundException, InterruptedException {
 		this.conf = configuration;
-		eduMap = new HashMap<Long, String>();
 		
 		int k = 10;
-		
+		eduMap = importCodeDescrMap("assets/edu_code");
+		stateMap = importCodeDescrMap("assets/state_code");
+				
 		runDictMapred(new Path("assets/id_car.csv"));
-		
 		generateDict();
+		getCuInfo();
 		VectorMapper.setDictionary(descr2idx);
+		VectorReducer.setCuInfo(consumerUnitInfo);
 		
 		runVectorMapred(new Path("assets/id_car.csv"));
 	
 		createInitClusterCenters(k);
+		KMeansDriver.run(conf, new Path("data/points"),
+				new Path("data/clusters"),
+				new Path("data/output"),
+				0.001, k, true, 0.1, false);
 		
 		
-		KMeansDriver.run(conf, new Path("data/points"), new Path("data/clusters"), new Path("data/output"), 0.001, k, true, 0.1, false);
-		
-		importEduMap("assets/edu_code");
-		
-		printCluster(new Path("data/output/clusters-10-final/part-r-00000"));
+		printClusters(new Path("data/output/clusters-10-final/part-r-00000"));
+		printPoints(new Path("data/points/part-r-00000"));
 		
 	}
-
-
-	private void importEduMap(String path) {
-		BufferedReader br;
-		try {
-			br = new BufferedReader(new FileReader(path));
-			String line = "";
-
-			while ((line = br.readLine()) != null) {
-				String[] tokens = line.split(" ", 2);
-				long code = Long.parseLong(tokens[0]);
-				String descr = tokens[1];
-
-				eduMap.put(code, descr);
+	
+	private void getCuInfo() throws IOException {
+		consumerUnitInfo = new HashMap<String, SequentialAccessSparseVector>();
+		
+		BufferedReader br = null;
+    	String line = "";
+     
+		br = new BufferedReader(new FileReader("assets/id_info_valid.csv"));
+		while ((line = br.readLine()) != null) {
+ 
+			String[] tokens = line.split(",");
+			String id = tokens[0];
+			try {
+				double age = Double.parseDouble(tokens[1]);
+				double edu = Double.parseDouble(tokens[2]);
+				double income = Double.parseDouble(tokens[3]);
+				int state = Integer.parseInt(tokens[4]);
+				
+				SequentialAccessSparseVector vector = new SequentialAccessSparseVector(vec_size);
+				vector.set(0, age/10);
+				vector.set(1, edu);
+				vector.set(2, income/10000);
+				vector.set(find_col_by_code(stateMap, state), 1);
+				consumerUnitInfo.put(id, vector);
+				
+			} catch (NumberFormatException e) {
+				continue;
 			}
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		} catch (NumberFormatException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
 		}
+		br.close();
 	}
 
-	public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException{
-		
-		new Clusterer(new Configuration());
-		
+
+	private int find_col_by_code(HashMap<Long, String> map, int code) {
+		dbg("code=" + code);
+		String descr = map.get(new Long(code));
+		dbg("descr=" + descr);
+		return descr2idx.get(descr);
 	}
 
-	private void printCluster(Path path) throws IOException{
+	private HashMap<Long, String> importCodeDescrMap(String path) throws NumberFormatException, IOException {
+		HashMap<Long, String> map = new HashMap<Long, String>();
+		
+		BufferedReader br;
+		br = new BufferedReader(new FileReader(path));
+		String line = "";
+
+		while ((line = br.readLine()) != null) {
+			String[] tokens = line.split(" ", 2);
+			long code = Long.parseLong(tokens[0]);
+			String descr = tokens[1];
+
+			map.put(code, descr);
+		}
+		
+		br.close();
+		return map;
+	}
+
+	private void printPoints(Path path) throws IOException {
 		FileSystem fs = FileSystem.get(conf);
 		SequenceFile.Reader reader = new SequenceFile.Reader(fs, path, conf);
 		
-		IntWritable key = new IntWritable();
-		ClusterWritable value = new ClusterWritable();
+		Text key = new Text();
+		VectorWritable value = new VectorWritable();
 		
 		while (reader.next(key, value)) {
+			Vector vector = value.get();
+			dbg(vector.toString());
+		}
+	}
+
+	private void printClusters(Path path) throws IOException{
+		FileSystem fs = FileSystem.get(conf);
+		SequenceFile.Reader reader = new SequenceFile.Reader(fs, path, conf);
+		
+		IntWritable cluster_id = new IntWritable();
+		ClusterWritable cluster = new ClusterWritable();
+		
+		while (reader.next(cluster_id, cluster)) {
 			
-			Vector center = value.getValue().getCenter();
-			Vector radius = value.getValue().getRadius();
+			Vector center = cluster.getValue().getCenter();
+			Vector radius = cluster.getValue().getRadius();
 			long age_l = Math.round((center.get(0) - radius.get(0))*10);
 			long age_h = Math.round((center.get(0) + radius.get(0))*10);
  			long edu_l = Math.round(center.get(1) - radius.get(1));
@@ -104,65 +156,96 @@ public class Clusterer {
 			if (income_l < 0)
 				income_l = 0;
 			
-			HashMap<Integer, Double> idx_val = new HashMap<Integer, Double>();
+			HashMap<Integer, Double> idx_val_car = new HashMap<Integer, Double>();
 			double val;
-			for (int i = 3; i < center.size(); i++) {
+			for (int i = car_base; i < state_base; i++) {
 				val = center.get(i);
-				idx_val.put(i, val);
+				idx_val_car.put(i, val);
 			}
+			String top3_car = getTopThree(idx_val_car);
 			
-	        ValueComparator bvc =  new ValueComparator(idx_val);
-	        TreeMap<Integer,Double> sorted_map = new TreeMap<Integer,Double>(bvc);
-
-	        sorted_map.putAll(idx_val);
+			HashMap<Integer, Double> idx_val_state = new HashMap<Integer, Double>();
+			for (int i = state_base; i < center.size(); i++) {
+				val = center.get(i);
+				idx_val_state.put(i, val);
+			}
+			String top3_state = getTopThree(idx_val_state);
+	        
+	        
 	        String eduRangeString = eduMap.get(edu_l);
 	        if (edu_l != edu_h) {
 	        	eduRangeString += " ~ " + eduMap.get(edu_h);
 	        }
-	        System.out.print("Cluster " + key.get() + ":" + 
+	        
+	        System.out.println("Cluster " + cluster_id.get() + 
+	        		" (n = " + cluster.getValue().getNumObservations() + "):" + 
 	        		"\n\t age = " + age_l + " ~ " + age_h +
 	        		"\n\t edu = " + eduRangeString + 
-	        		"\n\t income = " + income_l + " ~ " + income_h + 
-	        		"\n\t top cars = \n");
-	        
-	        int i = 0;
-	        for(int idx: sorted_map.keySet()) {
-	        	if (i > 2)
-	        		break;
-	        	
-	        	String descr = idx2descr.get(idx);
-	        	System.out.println("\t\t" + i + " " + descr + "->" + idx_val.get(idx));
-	        	i++;
-	        }
-	        System.out.print("\n");
-//	        dbg(value.getValue().toString());
+	        		"\n\t income = " + income_l + " ~ " + income_h +
+	        		"\n\t top states = " + top3_state +
+	        		"\n\t top cars = " + top3_car);
+	     
+//	        dbg(cluster.getValue().toString());
 			
 		}
 		reader.close();
 	}
 	
+	private String getTopThree(HashMap<Integer, Double> map) {
+		String s = "";
+		
+		ValueComparator vc =  new ValueComparator(map);
+        TreeMap<Integer,Double> sorted_map = new TreeMap<Integer,Double>(vc);
+        sorted_map.putAll(map);
+        
+        int i = 0;
+        for(int idx: sorted_map.keySet()) {
+        	if (i > 2) {break;}
+        	
+        	String descr = idx2descr.get(idx);
+        	s += "\n\t\t " + descr + " -> " + map.get(idx);
+        	i++;
+        }
+        return s;
+	}
+
 	private void generateDict() throws IOException {
 		descr2idx = new HashMap<String,Integer>();
 		idx2descr = new HashMap<Integer, String>();
+		
 		Path dictionaryPath = new Path("data/dict");
 		FileSystem fs = FileSystem.get(dictionaryPath.toUri(), conf); 
 		FileStatus[] outputFiles = fs.globStatus(new Path(dictionaryPath, "part-*"));
-		int i = 3;
+
+		List<String> features = Arrays.asList("age", "edu", "income");
+		for (String s: features) {
+			descr2idx.put(s, features.indexOf(s));
+		}
+		
+		//add dimensions of cars
+		int i = features.size();
+		car_base = i;
 		for (FileStatus fileStatus : outputFiles) {
 			Path path = fileStatus.getPath();
 			SequenceFile.Reader reader = new SequenceFile.Reader(fs, path, conf);
 			Text key = new Text();
 			IntWritable value = new IntWritable();
 			while (reader.next(key, value)) {
-				descr2idx.put(key.toString(), Integer.valueOf(i++));
+				descr2idx.put(key.toString(), i++);
 			}
 		}
-		descr2idx.put("age", 0);
-		descr2idx.put("edu", 1);
-		descr2idx.put("income", 2);
+		
+		state_base = i;
+		//add dimens of state
+		for (String s: stateMap.values()) {
+			descr2idx.put(s, i++);
+		}
+		
+		vec_size = descr2idx.size();
+		
 		for (String s: descr2idx.keySet()){
 			idx2descr.put(descr2idx.get(s), s);
-			System.out.println(s + " "+descr2idx.get(s));
+//			System.out.println(s + " "+descr2idx.get(s));
 		}
 	}
 

@@ -1,9 +1,10 @@
-package tagImpl;
+package plan_three;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -16,15 +17,22 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.Reducer.Context;
 import org.apache.mahout.math.DenseVector;
 import org.apache.mahout.math.NamedVector;
+import org.apache.mahout.math.SequentialAccessSparseVector;
 import org.apache.mahout.math.Vector;
 import org.apache.mahout.math.VectorWritable;
 
 public class VectorReducer extends Reducer<Text,VectorWritable,Text,VectorWritable> {
 	private VectorWritable writer = new VectorWritable();
-	private HashMap<String, DenseVector> consumerUnitInfo;
+	private static HashMap<String, SequentialAccessSparseVector> consumerUnitInfo;
 	
 	protected void reduce(Text id, Iterable<VectorWritable> values, Context context) 
 			  										throws IOException,InterruptedException {
+		//filter out the vectors where the cu info is not complete
+		SequentialAccessSparseVector info_vec = consumerUnitInfo.get(id.toString());
+		if (info_vec == null) {
+			return;
+		}
+		
 		Vector vector = null;
 		for (VectorWritable partialVector : values) {
 			if (vector == null) {
@@ -32,10 +40,7 @@ public class VectorReducer extends Reducer<Text,VectorWritable,Text,VectorWritab
 			}
 			vector = vector.plus(partialVector.get());
 		}
-		DenseVector info_vec = consumerUnitInfo.get(id.toString());
-		vector.set(2, info_vec.get(2));
-		vector.set(1, info_vec.get(1));
-		vector.set(0, info_vec.get(0));
+		vector = vector.plus(info_vec);
 		
 		NamedVector namedVector = new NamedVector(vector, id.toString());
 		System.out.println(namedVector.toString());
@@ -47,34 +52,15 @@ public class VectorReducer extends Reducer<Text,VectorWritable,Text,VectorWritab
 	protected void setup(
 			Reducer<Text, VectorWritable, Text, VectorWritable>.Context context)
 			throws IOException, InterruptedException {
-		getCuInfo();
 		super.setup(context);
 	}
 	
-	private void getCuInfo() throws IOException {
-		consumerUnitInfo = new HashMap<String, DenseVector>();
+	public static void setCuInfo(HashMap<String,SequentialAccessSparseVector> map) {
+		consumerUnitInfo = new HashMap<String, SequentialAccessSparseVector>();
+		consumerUnitInfo = map;
 		
-		BufferedReader br = null;
-    	String line = "";
-     
-		br = new BufferedReader(new FileReader("assets/id_info.csv"));
-		while ((line = br.readLine()) != null) {
- 
-			String[] tokens = line.split(",");
-			String id = tokens[0];
-			try {
-				double age = Double.parseDouble(tokens[1]);
-				double edu = Double.parseDouble(tokens[2]);
-				double income = Double.parseDouble(tokens[3]);
-				
-				DenseVector vector = new DenseVector(new double[]{age/10, edu, income/10000});
-				consumerUnitInfo.put(id, vector);
-				
-			} catch (NumberFormatException e) {
-				continue;
-			}
-		}
-		br.close();
+		System.out.println("set cu info!!");
 	}
+	
 	
 }

@@ -1,4 +1,4 @@
-package tagImpl;
+package plan_three;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -33,9 +33,8 @@ public class VectorMapper extends Mapper<LongWritable,Text,Text,VectorWritable> 
 		
 		String cu = fields[0];
 		String tag = fields[2] + "/"+ fields[1];
-		double weight = 1;
-		NamedVector vector = new NamedVector(new SequentialAccessSparseVector(dictionary.size() + 3), cu);
-		vector.set(dictionary.get(tag), weight);
+		NamedVector vector = new NamedVector(new SequentialAccessSparseVector(dictionary.size()), cu);
+		vector.set(dictionary.get(tag), 1);
 		writer.set(vector);
 		context.write(new Text(cu), writer);
 	}
