@@ -25,7 +25,7 @@ public class VectorMapper extends Mapper<LongWritable,Text,Text,VectorWritable> 
 	
 	private Pattern splitter;
 	private VectorWritable writer;
-	private Map<String,Integer> dictionary;
+	private static Map<String,Integer> dictionary;
 	
 	@Override
 	protected void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
@@ -44,34 +44,16 @@ public class VectorMapper extends Mapper<LongWritable,Text,Text,VectorWritable> 
 	protected void setup(Context context) throws IOException, InterruptedException {
 		super.setup(context);
 		Configuration conf = context.getConfiguration();
-		generateDict(conf);
 		
 		splitter = Pattern.compile(",");
 		writer = new VectorWritable();
 	}
 	
-	private void generateDict(Configuration conf) throws IOException {
-		dictionary = new HashMap<String,Integer>();
-		Path dictionaryPath = new Path("data/dict");
-		FileSystem fs = FileSystem.get(dictionaryPath.toUri(), conf); 
-		FileStatus[] outputFiles = fs.globStatus(new Path(dictionaryPath, "part-*"));
-		int i = 3;
-		for (FileStatus fileStatus : outputFiles) {
-			Path path = fileStatus.getPath();
-			SequenceFile.Reader reader = new SequenceFile.Reader(fs, path, conf);
-			Text key = new Text();
-			IntWritable value = new IntWritable();
-			while (reader.next(key, value)) {
-				dictionary.put(key.toString(), Integer.valueOf(i++));
-			}
-		}
-		dictionary.put(AGE, 0);
-		dictionary.put(EDU, 1);
-		dictionary.put(INCOME, 2);
-		for (String s: dictionary.keySet()){
-			System.out.println(s + " "+dictionary.get(s));
-		}
-
+	public static void setDictionary(Map<String,Integer> map) {
+		dictionary = new HashMap<String, Integer>();
+		dictionary = map;
 	}
+	
+	
 }
 

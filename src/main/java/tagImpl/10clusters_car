@@ -1,0 +1,90 @@
+Cluster 0:
+	 age = 72
+	 edu = High school graduate
+	 income = 20306
+	 top cars = 
+		0 CHE/110->0.16299559471365638
+		1 FOR/110->0.14390602055800295
+		2 BUI/100->0.11600587371512482
+
+Cluster 1:
+	 age = 32
+	 edu = High school graduate
+	 income = 16482
+	 top cars = 
+		0 FOR/110->0.16993464052287582
+		1 CHE/110->0.1607843137254902
+		2 CHE/100->0.09934640522875816
+
+Cluster 2:
+	 age = 64
+	 edu = Bachelor's degree
+	 income = 45429
+	 top cars = 
+		0 TOY/100->0.19444444444444445
+		1 FOR/110->0.14646464646464646
+		2 HON/100->0.1414141414141414
+
+Cluster 3:
+	 age = 49
+	 edu = Bachelor's degree
+	 income = 162604
+	 top cars = 
+		0 TOY/110->0.18507462686567164
+		1 FOR/110->0.17313432835820897
+		2 TOY/100->0.16417910447761194
+
+Cluster 4:
+	 age = 54
+	 edu = High school graduate
+	 income = 55492
+	 top cars = 
+		0 FOR/110->0.28254437869822485
+		1 CHE/110->0.2588757396449704
+		2 CHE/100->0.14201183431952663
+
+Cluster 5:
+	 age = 48
+	 edu = Bachelor's degree
+	 income = 366309
+	 top cars = 
+		0 CHE/110->0.1839080459770115
+		1 FOR/110->0.1724137931034483
+		2 TOY/100->0.13793103448275862
+
+Cluster 6:
+	 age = 46
+	 edu = Associate's degree
+	 income = 97646
+	 top cars = 
+		0 FOR/110->0.24552429667519182
+		1 CHE/110->0.2020460358056266
+		2 TOY/100->0.18542199488491048
+
+Cluster 7:
+	 age = 59
+	 edu = Some college, less than college graduate
+	 income = 581
+	 top cars = 
+		0 FOR/110->0.2003968253968254
+		1 CHE/110->0.1765873015873016
+		2 FOR/100->0.1111111111111111
+
+Cluster 8:
+	 age = 33
+	 edu = Associate's degree
+	 income = 51725
+	 top cars = 
+		0 FOR/110->0.1592356687898089
+		1 CHE/110->0.1464968152866242
+		2 HON/100->0.12738853503184713
+
+Cluster 9:
+	 age = 45
+	 edu = Bachelor's degree
+	 income = 7475
+	 top cars = 
+		0 TOY/100->0.15502183406113537
+		1 FOR/110->0.1331877729257642
+		2 HON/100->0.11353711790393013
+
