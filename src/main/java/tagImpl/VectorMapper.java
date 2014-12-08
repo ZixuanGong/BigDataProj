@@ -21,7 +21,7 @@ import org.apache.mahout.math.VectorWritable;
 public class VectorMapper extends Mapper<LongWritable,Text,Text,VectorWritable> {
 	private static final String AGE="age";
 	private static final String EDU="edu";
-	private static final String INCOME ="income";
+	private static final String INCOME="income";
 	
 	private Pattern splitter;
 	private VectorWritable writer;
@@ -52,7 +52,7 @@ public class VectorMapper extends Mapper<LongWritable,Text,Text,VectorWritable> 
 	
 	private void generateDict(Configuration conf) throws IOException {
 		dictionary = new HashMap<String,Integer>();
-		Path dictionaryPath = new Path("data/output");
+		Path dictionaryPath = new Path("data/dict");
 		FileSystem fs = FileSystem.get(dictionaryPath.toUri(), conf); 
 		FileStatus[] outputFiles = fs.globStatus(new Path(dictionaryPath, "part-*"));
 		int i = 3;
