@@ -45,6 +45,10 @@ public class VectorMapper extends Mapper<LongWritable,Text,Text,VectorWritable> 
 		super.setup(context);
 		Configuration conf = context.getConfiguration();
 		
+		for (String s: dictionary.keySet()) {
+			System.out.println(s);
+		}
+		
 		splitter = Pattern.compile(",");
 		writer = new VectorWritable();
 	}
@@ -52,6 +56,8 @@ public class VectorMapper extends Mapper<LongWritable,Text,Text,VectorWritable> 
 	public static void setDictionary(Map<String,Integer> map) {
 		dictionary = new HashMap<String, Integer>();
 		dictionary = map;
+		
+		System.out.println("set dict!!");
 	}
 	
 	

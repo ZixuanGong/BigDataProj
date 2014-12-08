@@ -19,6 +19,7 @@ import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
 import org.apache.mahout.clustering.iterator.ClusterWritable;
+import org.apache.mahout.clustering.kmeans.KMeansDriver;
 import org.apache.mahout.clustering.kmeans.Kluster;
 import org.apache.mahout.common.distance.EuclideanDistanceMeasure;
 import org.apache.mahout.math.Vector;
@@ -27,37 +28,33 @@ import org.apache.mahout.math.VectorWritable;
 public class Clusterer {
 	Configuration conf;
 	HashMap<Long, String> eduMap;
-	HashMap<Integer, String> carMap;
 	HashMap<String,Integer> descr2idx;
 	HashMap<Integer, String> idx2descr;
 	
-	public Clusterer(Configuration configuration) throws IOException {
+	public Clusterer(Configuration configuration) throws IOException, ClassNotFoundException, InterruptedException {
 		this.conf = configuration;
 		eduMap = new HashMap<Long, String>();
-		carMap = new HashMap<Integer, String>();
 		
 		int k = 10;
-		generateDict();
-//		VectorMapper.setDictionary(descr2idx);
 		
-//		runDictMapred(conf, new Path("assets/id_car.csv"));
-//		runVectorMapred(conf, new Path("assets/id_car.csv"));
-//	
-//		createInitClusterCenters(conf, k);
-//		
-//		
-//		KMeansDriver.run(conf, new Path("data/points"), new Path("data/clusters"), new Path("data/output"), 0.001, k, true, 0.1, false);
+		runDictMapred(new Path("assets/id_car.csv"));
+		
+		generateDict();
+		VectorMapper.setDictionary(descr2idx);
+		
+		runVectorMapred(new Path("assets/id_car.csv"));
+	
+		createInitClusterCenters(k);
+		
+		
+		KMeansDriver.run(conf, new Path("data/points"), new Path("data/clusters"), new Path("data/output"), 0.001, k, true, 0.1, false);
 		
 		importEduMap("assets/edu_code");
 		
-		importCarMap(new Path("data/dict/part-r-00000"));
 		printCluster(new Path("data/output/clusters-10-final/part-r-00000"));
 		
 	}
 
-	private void importCarMap(Path path) {
-		
-	}
 
 	private void importEduMap(String path) {
 		BufferedReader br;
