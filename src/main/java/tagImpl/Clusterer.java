@@ -96,15 +96,21 @@ public class Clusterer {
 		
 		while (reader.next(key, value)) {
 			
-			Vector vec = value.getValue().getCenter();
-			long age = Math.round(vec.get(0) * 10);
-			long edu = Math.round(vec.get(1));
-			long income = Math.round(vec.get(2) * 10000);
+			Vector center = value.getValue().getCenter();
+			Vector radius = value.getValue().getRadius();
+			long age_l = Math.round((center.get(0) - radius.get(0))*10);
+			long age_h = Math.round((center.get(0) + radius.get(0))*10);
+ 			long edu_l = Math.round(center.get(1) - radius.get(1));
+ 			long edu_h = Math.round(center.get(1) + radius.get(1));
+			long income_l = Math.round((center.get(2) - radius.get(2)) * 10000);
+			long income_h = Math.round((center.get(2) + radius.get(2)) * 10000);
+			if (income_l < 0)
+				income_l = 0;
 			
 			HashMap<Integer, Double> idx_val = new HashMap<Integer, Double>();
 			double val;
-			for (int i = 3; i < vec.size(); i++) {
-				val = vec.get(i);
+			for (int i = 3; i < center.size(); i++) {
+				val = center.get(i);
 				idx_val.put(i, val);
 			}
 			
@@ -112,11 +118,14 @@ public class Clusterer {
 	        TreeMap<Integer,Double> sorted_map = new TreeMap<Integer,Double>(bvc);
 
 	        sorted_map.putAll(idx_val);
-//	        dbg(""+sorted_map);
+	        String eduRangeString = eduMap.get(edu_l);
+	        if (edu_l != edu_h) {
+	        	eduRangeString += " ~ " + eduMap.get(edu_h);
+	        }
 	        System.out.print("Cluster " + key.get() + ":" + 
-	        		"\n\t age = " + age + 
-	        		"\n\t edu = " + eduMap.get(edu) + 
-	        		"\n\t income = " + income +
+	        		"\n\t age = " + age_l + " ~ " + age_h +
+	        		"\n\t edu = " + eduRangeString + 
+	        		"\n\t income = " + income_l + " ~ " + income_h + 
 	        		"\n\t top cars = \n");
 	        
 	        int i = 0;
@@ -129,7 +138,7 @@ public class Clusterer {
 	        	i++;
 	        }
 	        System.out.print("\n");
-	        dbg(value.getValue().toString());
+//	        dbg(value.getValue().toString());
 			
 		}
 		reader.close();
