@@ -31,12 +31,14 @@ public class Clusterer {
 	Configuration conf;
 	HashMap<Long, String> eduMap;
 	HashMap<Long, String> stateMap;
+	HashMap<Long, String> occuMap;
 	HashMap<String,Integer> descr2idx;
 	HashMap<Integer, String> idx2descr;
 	HashMap<String, SequentialAccessSparseVector> consumerUnitInfo;
 	int vec_size;
 	int car_base;
 	int state_base;
+	int occu_base;
 	
 	public Clusterer(Configuration configuration) throws IOException, ClassNotFoundException, InterruptedException {
 		this.conf = configuration;
@@ -44,23 +46,24 @@ public class Clusterer {
 		int k = 10;
 		eduMap = importCodeDescrMap("assets/edu_code");
 		stateMap = importCodeDescrMap("assets/state_code");
+		occuMap = importCodeDescrMap("assets/occu_code");
 				
-		runDictMapred(new Path("assets/id_car.csv"));
+//		runDictMapred(new Path("assets/id_car.csv"));
 		generateDict();
-		getCuInfo();
-		VectorMapper.setDictionary(descr2idx);
-		VectorReducer.setCuInfo(consumerUnitInfo);
+//		getCuInfo();
+//		VectorMapper.setDictionary(descr2idx);
+//		VectorReducer.setCuInfo(consumerUnitInfo);
+//		
+//		runVectorMapred(new Path("assets/id_car.csv"));
+//	
+//		createInitClusterCenters(k);
+//		KMeansDriver.run(conf, new Path("data/points"),
+//				new Path("data/clusters"),
+//				new Path("data/output"),
+//				0.001, k, true, 0.1, false);
 		
-		runVectorMapred(new Path("assets/id_car.csv"));
-	
-		createInitClusterCenters(k);
-		KMeansDriver.run(conf, new Path("data/points"),
-				new Path("data/clusters"),
-				new Path("data/output"),
-				0.001, k, true, 0.1, false);
 		
-		
-		printClusters(new Path("data/output/clusters-10-final/part-r-00000"));
+//		printClusters(new Path("data/output/clusters-10-final/part-r-00000"));
 		printPoints(new Path("data/points/part-r-00000"));
 		
 	}
@@ -80,13 +83,15 @@ public class Clusterer {
 				double age = Double.parseDouble(tokens[1]);
 				double edu = Double.parseDouble(tokens[2]);
 				double income = Double.parseDouble(tokens[3]);
-				int state = Integer.parseInt(tokens[4]);
+				Long state = Long.parseLong(tokens[4]);
+				Long occu = Long.parseLong(tokens[6]);
 				
 				SequentialAccessSparseVector vector = new SequentialAccessSparseVector(vec_size);
 				vector.set(0, age/10);
 				vector.set(1, edu);
 				vector.set(2, income/10000);
 				vector.set(find_col_by_code(stateMap, state), 1);
+				vector.set(find_col_by_code(occuMap, occu), 1);
 				consumerUnitInfo.put(id, vector);
 				
 			} catch (NumberFormatException e) {
@@ -97,9 +102,9 @@ public class Clusterer {
 	}
 
 
-	private int find_col_by_code(HashMap<Long, String> map, int code) {
+	private int find_col_by_code(HashMap<Long, String> map, Long code) {
 		dbg("code=" + code);
-		String descr = map.get(new Long(code));
+		String descr = map.get(code);
 		dbg("descr=" + descr);
 		return descr2idx.get(descr);
 	}
@@ -165,11 +170,18 @@ public class Clusterer {
 			String top3_car = getTopThree(idx_val_car);
 			
 			HashMap<Integer, Double> idx_val_state = new HashMap<Integer, Double>();
-			for (int i = state_base; i < center.size(); i++) {
+			for (int i = state_base; i < occu_base; i++) {
 				val = center.get(i);
 				idx_val_state.put(i, val);
 			}
 			String top3_state = getTopThree(idx_val_state);
+			
+			HashMap<Integer, Double> idx_val_occu = new HashMap<Integer, Double>();
+			for (int i = occu_base; i < center.size(); i++) {
+				val = center.get(i);
+				idx_val_occu.put(i, val);
+			}
+			String top3_occu = getTopThree(idx_val_occu);
 	        
 	        
 	        String eduRangeString = eduMap.get(edu_l);
@@ -177,15 +189,16 @@ public class Clusterer {
 	        	eduRangeString += " ~ " + eduMap.get(edu_h);
 	        }
 	        
-	        System.out.println("Cluster " + cluster_id.get() + 
-	        		" (n = " + cluster.getValue().getNumObservations() + "):" + 
-	        		"\n\t age = " + age_l + " ~ " + age_h +
-	        		"\n\t edu = " + eduRangeString + 
-	        		"\n\t income = " + income_l + " ~ " + income_h +
-	        		"\n\t top states = " + top3_state +
-	        		"\n\t top cars = " + top3_car);
+//	        System.out.println("Cluster " + cluster_id.get() + 
+//	        		" (n = " + cluster.getValue().getNumObservations() + "):" + 
+//	        		"\n\t age = " + age_l + " ~ " + age_h +
+//	        		"\n\t edu = " + eduRangeString + 
+//	        		"\n\t income = " + income_l + " ~ " + income_h +
+//	        		"\n\t top states = " + top3_state +
+//	        		"\n\t top occupations = " + top3_occu +
+//	        		"\n\t top cars = " + top3_car);
 	     
-//	        dbg(cluster.getValue().toString());
+	        dbg(cluster.getValue().toString());
 			
 		}
 		reader.close();
@@ -211,7 +224,7 @@ public class Clusterer {
 
 	private void generateDict() throws IOException {
 		descr2idx = new HashMap<String,Integer>();
-		idx2descr = new HashMap<Integer, String>();
+		idx2descr = new HashMap<Integer,String>();
 		
 		Path dictionaryPath = new Path("data/dict");
 		FileSystem fs = FileSystem.get(dictionaryPath.toUri(), conf); 
@@ -241,11 +254,15 @@ public class Clusterer {
 			descr2idx.put(s, i++);
 		}
 		
+		occu_base = i;
+		for (String s: occuMap.values()) {
+			descr2idx.put(s, i++);
+		}
+		
 		vec_size = descr2idx.size();
 		
 		for (String s: descr2idx.keySet()){
 			idx2descr.put(descr2idx.get(s), s);
-//			System.out.println(s + " "+descr2idx.get(s));
 		}
 	}
 
