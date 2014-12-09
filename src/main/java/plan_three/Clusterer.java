@@ -3,11 +3,14 @@ package plan_three;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
+import org.apache.commons.collections.list.TreeList;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -22,7 +25,6 @@ import org.apache.mahout.clustering.iterator.ClusterWritable;
 import org.apache.mahout.clustering.kmeans.KMeansDriver;
 import org.apache.mahout.clustering.kmeans.Kluster;
 import org.apache.mahout.common.distance.EuclideanDistanceMeasure;
-import org.apache.mahout.math.DenseVector;
 import org.apache.mahout.math.SequentialAccessSparseVector;
 import org.apache.mahout.math.Vector;
 import org.apache.mahout.math.VectorWritable;
@@ -35,6 +37,7 @@ public class Clusterer {
 	HashMap<String,Integer> descr2idx;
 	HashMap<Integer, String> idx2descr;
 	HashMap<String, SequentialAccessSparseVector> consumerUnitInfo;
+	HashMap<Vector, String> centerMap;
 	int vec_size;
 	int car_base;
 	int state_base;
@@ -48,26 +51,112 @@ public class Clusterer {
 		stateMap = importCodeDescrMap("assets/state_code");
 		occuMap = importCodeDescrMap("assets/occu_code");
 				
-//		runDictMapred(new Path("assets/id_car.csv"));
-		generateDict();
-//		getCuInfo();
-//		VectorMapper.setDictionary(descr2idx);
-//		VectorReducer.setCuInfo(consumerUnitInfo);
-//		
-//		runVectorMapred(new Path("assets/id_car.csv"));
-//	
-//		createInitClusterCenters(k);
-//		KMeansDriver.run(conf, new Path("data/points"),
-//				new Path("data/clusters"),
-//				new Path("data/output"),
-//				0.001, k, true, 0.1, false);
+		runDictMapred(new Path("assets/id_car.csv"));
 		
+		generateDict();
+		getCuInfo();
+		VectorMapper.setDictionary(descr2idx);
+		VectorReducer.setCuInfo(consumerUnitInfo);
+		
+		runVectorMapred(new Path("assets/id_car.csv"));
+	
+		createInitClusterCenters(k);
+		KMeansDriver.run(conf, new Path("data/points"),
+				new Path("data/clusters"),
+				new Path("data/output"),
+				0.001, k, true, 0.1, false);
 		
 //		printClusters(new Path("data/output/clusters-10-final/part-r-00000"));
-		printPoints(new Path("data/points/part-r-00000"));
+//		printPoints(new Path("data/points/part-r-00000"));
 		
+		BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
+		
+		while (true) {
+			System.out.println("Service code:");
+			System.out.println("\t 0 Print clusters");
+			System.out.println("\t 1 Print all points");
+			System.out.println("\t 2 Analyze a person");
+			System.out.print("Input service code:");
+			String line = stdIn.readLine();
+			
+			int code = Integer.parseInt(line);
+			if (code == 0)
+				printClusters(new Path("data/output/clusters-10-final/part-r-00000"));
+			else if (code == 1)
+				printPoints(new Path("data/points/part-r-00000"));
+			else if (code == 2)
+				analyze_input();
+			
+			System.out.println("\n\n");
+		}		
 	}
 	
+	private void analyze_input() throws IOException {
+		System.out.print("Age:");
+		BufferedReader stdIn = new BufferedReader(new InputStreamReader(System.in));
+		String input;
+		
+		input = stdIn.readLine();
+		int age = Integer.parseInt(input);
+		
+		System.out.println("Edu code:");
+		TreeSet<Long> keyList = new TreeSet<Long>(eduMap.keySet());
+		for (Long key: keyList) {
+			System.out.println("\t" + key + " " + eduMap.get(key));
+		}
+		System.out.print("Education:");
+		input = stdIn.readLine();
+		int edu = Integer.parseInt(input);
+		
+		System.out.print("Income:");
+		input = stdIn.readLine();
+		int income = Integer.parseInt(input);
+		
+		System.out.println(" code:");
+		keyList = new TreeSet<Long>(stateMap.keySet());
+		for (Long key: keyList) {
+			System.out.println("\t" + key + " " + stateMap.get(key));
+		}
+		System.out.print("State:");
+		input = stdIn.readLine();
+		Long state = Long.parseLong(input);
+		
+		System.out.println("Occupation code:");
+		keyList = new TreeSet<Long>(occuMap.keySet());
+		for (Long key: keyList) {
+			System.out.println("\t" + key + " " + occuMap.get(key));
+		}
+		System.out.print("Occupation:");
+		input = stdIn.readLine();
+		Long occu = Long.parseLong(input);
+		
+		SequentialAccessSparseVector person = new SequentialAccessSparseVector(descr2idx.size());
+		person.set(0, age/10);
+		person.set(1, edu);
+		person.set(2, income/10000);
+		person.set(find_col_by_code(stateMap, state), 1);
+		person.set(find_col_by_code(occuMap, occu), 1);
+		
+		Vector closest_center = null;
+		double min_dist = Double.MAX_VALUE;
+		for (Vector center: centerMap.keySet()) {
+			double distance = 0;
+			
+			for (int i=0; i<center.size(); i++)
+				distance += Math.abs(center.get(i) - person.get(i));
+			
+			if (distance < min_dist) {
+				min_dist = distance;
+				closest_center = center;
+			}
+		}
+		
+		String cluster_descr = centerMap.get(closest_center);
+		
+		System.out.println("This person most likely belongs to this cluster: \n" + cluster_descr);
+		
+	}
+
 	private void getCuInfo() throws IOException {
 		consumerUnitInfo = new HashMap<String, SequentialAccessSparseVector>();
 		
@@ -148,6 +237,8 @@ public class Clusterer {
 		IntWritable cluster_id = new IntWritable();
 		ClusterWritable cluster = new ClusterWritable();
 		
+		centerMap = new HashMap<Vector, String>();
+		
 		while (reader.next(cluster_id, cluster)) {
 			
 			Vector center = cluster.getValue().getCenter();
@@ -189,16 +280,19 @@ public class Clusterer {
 	        	eduRangeString += " ~ " + eduMap.get(edu_h);
 	        }
 	        
-//	        System.out.println("Cluster " + cluster_id.get() + 
-//	        		" (n = " + cluster.getValue().getNumObservations() + "):" + 
-//	        		"\n\t age = " + age_l + " ~ " + age_h +
-//	        		"\n\t edu = " + eduRangeString + 
-//	        		"\n\t income = " + income_l + " ~ " + income_h +
-//	        		"\n\t top states = " + top3_state +
-//	        		"\n\t top occupations = " + top3_occu +
-//	        		"\n\t top cars = " + top3_car);
+	        String cluster_descr = "Cluster " + cluster_id.get() + 
+	        		" (n = " + cluster.getValue().getNumObservations() + "):" + 
+	        		"\n\t age = " + age_l + " ~ " + age_h +
+	        		"\n\t edu = " + eduRangeString + 
+	        		"\n\t income = " + income_l + " ~ " + income_h +
+	        		"\n\t top states = " + top3_state +
+	        		"\n\t top occupations = " + top3_occu +
+	        		"\n\t top cars = " + top3_car;
+	        centerMap.put(center, cluster_descr);
+	        
+	        System.out.println(cluster_descr);
 	     
-	        dbg(cluster.getValue().toString());
+	        dbg("\t " + cluster.getValue().toString());
 			
 		}
 		reader.close();
